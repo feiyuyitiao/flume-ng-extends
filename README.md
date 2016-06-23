@@ -1,16 +1,6 @@
-# flume-ng-extends-source
+#flume数据源优化
 
-Extends source of Flume NG for tailing files and folders.
-
-* [SpoolDirectoryTailFileSource](#spooldirectorytailfilesource)：spooling directory, collect all the historical files and tail the target file;
-* [TailFile]：TODO
-* [TailDirectory]：TODO
-* [KafkaSource](#kafkasource)：consume events from Kafka(Kafka_2.9.2_0.8.2.0)
-
-
-
-
-------------------------
+----
 
 #SpoolDirectoryTailFileSource
 
@@ -19,32 +9,19 @@ Extends source of Flume NG for tailing files and folders.
 * [解决方案](#解决方案)
 	* [组件版本](#组件版本)
 	* [预装环境](#预装环境)
-	* [编译](#编译)
 	* [安装插件](#安装插件)
 	* [配置文件](#配置文件)
 	* [配置参数详解](#配置参数详解)
 	* [约定条件](#约定条件)
-* [交流反馈](#交流反馈)
-* [附录](#附录)
-	* [方案灵感来源](#方案灵感来源)
 	* [可靠性分析](#可靠性分析)
-* [参考来源](#参考来源)
+* [微信券活动分析](#微信券活动分析)
 	
 ##场景
 
 收集日志，具体场景：
 
-* 应用运行时，每天都在指定目录下，产生一个新的日志文件，日志文件名称：`HH_2015-02-25.txt`，注：文件名中包含日期信息；
-* 应用运行时，向当日日志文件追加内容，例如，在2015年02月25日，应用的运行信息，会实时追加到`HH_2015-02-25.txt`文件中；
-
-
-实际说个例子：
-
-* 应用生成的日志文件，都在目录：`E:/app/log`下；
-* 2015年02月24日，应用在目录`E:/app/log`下，生成文件`HH_2015-02-24.txt`，并且，运行信息会实时追加到此文件中；
-* 2015年02月25日，应用在目录`E:/app/log`下，生成新的文件`HH_2015-02-25.txt`，并且，将当日的运行信息实时追加到此文件中；
-
-**特别说明**：此场景的解决方案就是下文提到的`SpoolDirectoryTailFileSource`。
+* 应用运行时，每天都在指定目录下，产生一个新的日志文件，日志文件名称随意如：`info.log`
+* 应用运行时，向当日日志文件追加内容，例如，在2015年02月25日，应用的运行信息，会实时追加到`info.log`文件中；
 
 
 ##要求
@@ -52,8 +29,8 @@ Extends source of Flume NG for tailing files and folders.
 在上述场景下，要求，实时收集应用的运行日志，整体性能上几点：
 
 * 实时：日志产生后，应以秒级的延时，收集发送走；
-* 可靠：一旦日志收集程序终止，保证重启之后，日志数据不丢失，并且不重复发送；
-* 历史日志文件处理策略：已经收集过的历史日志文件，应立即删除，或者被移送到指定目录；
+* 可靠：一旦日志收集程序终止，保证flume重启之后，日志数据不丢失，并且不重复发送；
+* 历史日志文件处理策略：已经收集过的历史日志文件，会标记文件名字到一个白名单中:日志收集目录spoolDir下的.flumespooltail/.flumespooltailfile-file-names-queue.properties
 
 
 
@@ -78,18 +55,10 @@ Extends source of Flume NG for tailing files and folders.
 
 
 
-###编译
-
-本工程使用[Apache Maven 3][Apache Maven 3]来编译，可以从[这里](http://maven.apache.org/download.cgi)下载不同OS环境下的Maven安装文件。
-
-执行命令：`mvn clean package`，默认在`${project_root}/target/`目录下，编译生成`flume-ng-extends-source-x.x.x.jar`。
-
-
-
 
 ###安装插件
 
-1. 按照上一部分[编译](#编译)获取工程的jar包：`flume-ng-extends-source-x.x.x.jar`；
+1. 准备好工程的jar包：`flume-ng-extends-source-x.x.x.jar`；
 1. 两种方法，可以在Flume下安装插件：
 
 **方法一**：标准插件安装 *(Recommended Approach)*，具体步骤：
@@ -109,10 +78,6 @@ Extends source of Flume NG for tailing files and folders.
 
 Flume插件安装的更多细节，参考[Flume User Guide](https://flume.apache.org/FlumeUserGuide.html#the-plugins-d-directory)
 
-				
-**疑问**：maven打包时，如何将当前jar包以及其依赖包都导出？
-参考[thilinamb flume kafka sink](https://github.com/thilinamb/flume-ng-kafka-sink)
-
 
 **方法二**：快速插件安装 *(Quick and Dirty Approach)*，具体步骤：
 
@@ -124,22 +89,33 @@ Flume插件安装的更多细节，参考[Flume User Guide](https://flume.apache
 
 在flume的配置文件`flume-conf.properties`中，配置`agent`下`SpoolDirectoryTailFileSource` source，参考代码如下：
 
-	# Spooling dir and tail file Source 
-	agent.sources.spoolDirTailFile.type = com.github.ningg.flume.source.SpoolDirectoryTailFileSource
-	# on WIN plantform spoolDir should be format like: E:/program files/spoolDir
-	# Note: the value of spoolDir MUST NOT be surrounded by quotation marks.
-	agent.sources.spoolDirTailFile.spoolDir = /home/storm/goodjob/spoolDir
-	agent.sources.spoolDirTailFile.fileSuffix = .COMPLETED
-	agent.sources.spoolDirTailFile.deletePolicy = never 
-	agent.sources.spoolDirTailFile.ignorePattern = ^$
-	agent.sources.spoolDirTailFile.targetPattern = .*(\\d){4}-(\\d){2}-(\\d){2}.*
-	agent.sources.spoolDirTailFile.targetFilename = yyyy-MM-dd
-	agent.sources.spoolDirTailFile.trackerDir = .flumespooltail
-	agent.sources.spoolDirTailFile.consumeOrder = oldest
-	agent.sources.spoolDirTailFile.batchSize = 100
-	agent.sources.spoolDirTailFile.inputCharset = UTF-8
-	agent.sources.spoolDirTailFile.decodeErrorPolicy = REPLACE
-	agent.sources.spoolDirTailFile.deserializer = LINE
+	#Name the compents on this a2
+a2.sources = spoolDirTailFile
+a2.sinks = k1
+a2.channels = c1
+a2.sources.spoolDirTailFile.type = com.github.ningg.flume.source.SpoolDirectoryTailFileSource
+a2.sources.spoolDirTailFile.spoolDir =/home/song/workspace/bigdata/firstMavenTest/logs
+a2.sources.spoolDirTailFile.channels = c1
+a2.sources.spoolDirTailFile.interceptors=i1
+a2.sources.spoolDirTailFile.interceptors.i1.type=regex_filter
+a2.sources.spoolDirTailFile.interceptors.i1.regex=yazuo
+a2.sources.spoolDirTailFile.deletePolicy =filenames
+a2.sources.spoolDirTailFile.ignorePattern =^$
+a2.sources.spoolDirTailFile.targetPattern = .*(\\d){4}-(\\d){2}-(\\d){2}.*
+a2.sources.spoolDirTailFile.targetFilename =info.log
+a2.sources.spoolDirTailFile.trackerDir = .flumespooltail
+a2.sources.spoolDirTailFile.consumeOrder=oldest
+a2.sources.spoolDirTailFile.batchSize =100
+a2.sources.spoolDirTailFile.inputCharset = UTF-8
+a2.sources.spoolDirTailFile.decodeErrorPolicy = REPLACE
+a2.sources.spoolDirTailFile.deserializer = LINE/wrapLine
+
+a2.sinks.k1.type = logger
+a2.sinks.k1.channel = c1
+a2.channels.c1.type =file
+a2.channels.c1.capacity = 1000
+a2.channels.c1.transactionCapacity = 100
+
 
 
 ###配置参数详解
@@ -152,7 +128,7 @@ Flume插件安装的更多细节，参考[Flume User Guide](https://flume.apache
 |**type**|	–	|The component type name, needs to be `com.github.ningg.flume.source.SpoolDirectoryTailFileSource`.|
 |**spoolDir**|	–	|The directory from which to read files from.|
 |fileSuffix|	`.COMPLETED`|	Suffix to append to completely ingested files|
-|deletePolicy|	`never`|	When to delete completed files: `never` or `immediate`|
+|deletePolicy|	`filenames`|	How to determine completed files: `filenames` or `never` or `immediate`|
 |fileHeader|	`false`|	Whether to add a header storing the absolute path filename.|
 |fileHeaderKey|	`file`|	Header key to use when appending absolute path filename to event header.|
 |basenameHeader|	`false`|	Whether to add a header storing the basename of the file.|
@@ -176,10 +152,6 @@ Flume插件安装的更多细节，参考[Flume User Guide](https://flume.apache
 |interceptors.*	|  |  |
 
 
-**补充**：上述，selector和interceptor的作用？
-
-* selector：通过event对应的Header，来将event发送到对应的channel中；
-* interceptor：在event进入channel之前，修改或者删除event，多个interceptor构成一条链；
 	
 	
 ###约定条件
@@ -189,47 +161,7 @@ Flume插件安装的更多细节，参考[Flume User Guide](https://flume.apache
 * 按日期，每日生成一个新日志文件；
 * 只以追加方式写入当日的日志文件；
 * 在source 监听当日的日志文件时，其他进程不会删除当日的日志文件；
-	* 思考：如果这一情况发生，怎么办？
-	* 解决思路：能否自动重启Flume agent进程，或者只启动收集数据的线程？
-* 不会在同一目录下，生成名称完全相同的文件；*（当`deletePolicy`=`immediate`时，无此限制）*
-	* 思考：如果这一情况发生，怎么办？
-	* 解决思路：技术上解决不是问题，关键是策略，当文件名称相同时，如何应对；
-
-
-##交流反馈
-
-如果你对这一工程有任何建议，几个途径联系我：
-
-* 在工程下，提出[Isusses](https://github.com/ningg/flume-ng-extends-source/issues)	*（推荐）*
-* [在bolg发表评论](http://ningg.github.io/project-flume-ng-extends-source/)
-
-
-##附录
-
-
-###方案灵感来源
-
-遇到问题去收集资料，对现有的Flume source进行了简单的浏览，发现Flume的Spooling Directory Source机制，很有意思，几点：
-
-* 遍历指定目录下的文件，收集文件内容；
-* 对已经收集了内容的文件，进行删除或者重命名；
-* 很高的可靠性，即使进程重启，不会造成Spooling Directory Source产生数据丢失和数据的重复发送；
-
-这一机制，跟我们遇到的场景很像，具体差异点：
-
-* Spooling Directory Source，不允许对文件内容进行追加；
-* Spooling Directory Source定制方向：
-	* 能够先遍历历史文件，并收集文件内容；
-	* 最后，再遍历到当日日志文件（下文称目标文件），并实时收集目标文件的新增内容；
-	* 次日时，结束对上一日的目标文件的监听收集，同时，自动转入当日的新的目标文件；
-
-
-__特别说明__：
-
-* 历史日志文件，按照日志文件的最后编辑日志来排序，日期最小的，为最早的历史日志文件；
-* 默认约束：日志文件，约束如下：
-	* 追加写入：只以追加方式，写入新增内容；而不能修改之前写入的内容；
-	* 当日定论：次日不再编辑前一日的日志；
+* 不会在同一目录下，生成名称完全相同的文件；
 
 
 ###可靠性分析
@@ -238,87 +170,25 @@ __特别说明__：
 
 * 日志一直在追加更新，隔日才启动实时收集程序；
 * 实时收集程序，当日终止，当日重启；
-* 实时收集程序，当日终止，次日重启；
+* 实时收集程序，当日终止，(0-n)次日重启；
 
 上面都是借助meta文件来实现的。
 
 
 
 
-##参考来源
+##微信券活动分析
 
-* [Apache Flume NG--User Guide][Apache Flume NG--User Guide]
-* [java.text.SimpleDateFormat][java.text.SimpleDateFormat]
-* [GitHub--tail flume][GitHub--tail flume]
-* [Apache Flume NG(source)][Apache Flume NG(source)]
+###flume配置文件更改
 
+### weixin_coupon
 
------------------------------
+* a2.sources.spoolDirTailFile.spoolDir =/home/weixin/tomcat_weixin/logs/weixinCardCoupon
+* a2.sources.spoolDirTailFile.interceptors.i1.regex=AppLogUtil
 
-
-#KafkaSource
-
-（doing...）正在整理，具体包含：
-
-* KafkaSource中事务保证；
-* 如何将KafkaSource依赖的jar包，整理到zip中？
+### weixin_api
+* a2.sources.spoolDirTailFile.spoolDir=/yazuo_apps/logs/weixin-api/log
+* a2.sources.spoolDirTailFile.interceptors.i1.regex=AppLogUtil
 
 
-
-来源：Github上apache flume中kafka source
-
-思考几点：
-
-* Kafka Source中有没有事务保证（transaction）
-	* Kafka Source中offset如何重置？（可参考storm-kafka）
-	* Flume中channel可以rollback；
-
-	
-两类jar包：
-
-* lib中jar包
-	* `flume-ng-extends-source-x.x.x.jar`
-* libext中jar包
-	* `kafka_2.9.2-0.8.2.0.jar`
-	* `kafka-clients-0.8.2.0.jar`
-	* `metrics-core-2.2.0.jar`
-	* `scala-library-2.9.2.jar`
-	* `zkclient-0.3.jar`
-
-
-注：关于KafkaSource用法的细节，参考[文章][Flume实现将Kafka中数据传入ElasticSearch中]。
-
-
-
-##参考来源
-
-
-* [Flume Deveploger Guide][Flume Deveploger Guide]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-[Flume Deveploger Guide]:				http://flume.apache.org/FlumeDeveloperGuide.html
-[Apache Flume NG--User Guide]:			http://flume.apache.org/FlumeUserGuide.html
-[java.text.SimpleDateFormat]:			http://docs.oracle.com/javase/7/docs/api/java/text/SimpleDateFormat.html
-[GitHub--tail flume]:					https://github.com/search?utf8=%E2%9C%93&q=tail+flume&type=Repositories&ref=searchresults
-[Apache Maven 3]:						http://maven.apache.org/
-[Apache Flume NG(source)]:				https://github.com/apache/flume
-
-
-
-[Flume实现将Kafka中数据传入ElasticSearch中]:			/flume-kafka-source-elasticsearch-sink
-
-
-
+参考[flume-ng-extends-sourc](https://github.com/ningg/flume-ng-extends-source)
