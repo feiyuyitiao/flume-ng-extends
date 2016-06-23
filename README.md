@@ -172,23 +172,8 @@ a2.channels.c1.transactionCapacity = 100
 * 实时收集程序，当日终止，当日重启；
 * 实时收集程序，当日终止，(0-n)次日重启；
 
-上面都是借助meta文件来实现的。
+上面都是借助更新meta文件来实现的。
 
-
-
-
-##微信券活动分析
-
-###flume配置文件更改
-
-### weixin_coupon
-
-* a2.sources.spoolDirTailFile.spoolDir =/home/weixin/tomcat_weixin/logs/weixinCardCoupon
-* a2.sources.spoolDirTailFile.interceptors.i1.regex=AppLogUtil
-
-### weixin_api
-* a2.sources.spoolDirTailFile.spoolDir=/yazuo_apps/logs/weixin-api/log
-* a2.sources.spoolDirTailFile.interceptors.i1.regex=AppLogUtil
 
 
 参考[flume-ng-extends-sourc](https://github.com/ningg/flume-ng-extends-source)
